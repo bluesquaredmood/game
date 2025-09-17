@@ -1,73 +1,73 @@
-from tkinter import *
+import streamlit as st
+import time
+import threading
 
+# 초기값 설정
 잔여시간 = 0
 cnt = 0
-timer_job = None     # after() id 저장(None이면 예약이 없는 상태)
-running = False      # 타이머 동작 여부
-#######
-#after()는 일정 시간이 지난 뒤에 특정 함수를 실행하게 예약하는 역할 - 반환값이 작업의 id
-#after_cancel()은 예약된 after()작업을 취소하는 역할 - after_cancel(작업id)
-#######
-def start_timer(): # 중복 예약 방지: 기존 타이머 취소
-    global 잔여시간, timer_job, running, cnt
-    #만약 예약이 걸려있으면 이것을 취소해라!
-    if timer_job is not None:
-        tk.after_cancel(timer_job)
-    #다양한 변수 초기화
-    잔여시간 = 5
-    cnt = 0
-    lb.config(text='현재 횟수:0')
-    timer_label.config(text = f'Time left: {잔여시간} seconds')
-    bt1.config(state=NORMAL, command = click)
-    start_button.config(state=DISABLED)
-    running=True
-    #update_timer()호출
-    update_timer()
-    
+running = False
+timer_thread = None
+
+# 타이머 업데이트 함수
 def update_timer():
-    global 잔여시간, timer_job, running, cnt
-    #잔여시간(레이블) 띄우기
-    timer_label.config(text=f'Time left: {잔여시간} seconds')
-    #종료처리
-    if 잔여시간 <=0:
-        running=False
-        bt1.config(state=DISABLED)
-        lb.config(text='최종 횟수: '+str(cnt))
-        timer_label.config(text='TIME OVER')
-        start_button.config(state=NORMAL) #다시 시작 가능~~~
-        timer_job = None
-        return 
-    #잔여시간 관리
-    잔여시간 -=1
-    timer_job = tk.after(1000, update_timer)
+    global 잔여시간, running, cnt
+    while 잔여시간 > 0 and running:
+        time.sleep(1)
+        잔여시간 -= 1
+        # 실시간 타이머 업데이트
+        st.session_state.timer_text = f'Time left: {잔여시간} seconds'
+        if 잔여시간 <= 0:
+            running = False
+            st.session_state.timer_text = 'TIME OVER'
+            st.session_state.final_count = cnt
+            st.session_state.start_button_disabled = False
+            st.session_state.button_disabled = True
+            break
+
+# 시작 버튼 클릭시 호출되는 함수
+def start_timer():
+    global 잔여시간, cnt, running
+    잔여시간 = 5  # 타이머 시간 설정 (초 단위)
+    cnt = 0  # 클릭 횟수 초기화
+    running = True
+    st.session_state.timer_text = f'Time left: {잔여시간} seconds'
+    st.session_state.current_count = f'현재 횟수: {cnt}'
+    st.session_state.start_button_disabled = True
+    st.session_state.button_disabled = False
+    st.session_state.final_count = None
+
+    # 타이머 쓰레드 실행
+    threading.Thread(target=update_timer, daemon=True).start()
+
+# 버튼 클릭시 호출되는 함수
 def click():
     global cnt
     if running:
         cnt += 1
-        lb.config(text='현재 횟수: ' + str(cnt))
+        st.session_state.current_count = f'현재 횟수: {cnt}'
 
-def reset():
-    global cnt
+# 초기 UI 설정
+st.title('주어진 시간동안 최대한 많이 클릭하세요!')
+
+# 타이머 상태 표시
+st.text(st.session_state.get("timer_text", "Time left: 0 seconds"))
+
+# 클릭 횟수 표시
+st.text(st.session_state.get("current_count", "현재 횟수: 0"))
+
+# 클릭 버튼
+if st.button('Button', disabled=st.session_state.get("button_disabled", False)):
+    click()
+
+# 시작 버튼
+if st.button('Start Timer', disabled=st.session_state.get("start_button_disabled", False)):
+    start_timer()
+
+# 리셋 버튼
+if st.button('Reset'):
     cnt = 0
-    lb.config(text='현재 횟수: 0')
-
-tk = Tk()
-tk.geometry('500x220')
-tk.title('주어진 시간동안 최대한 많이 클릭하세요!')
-
-timer_label = Label(tk, text="Time left: 0 seconds", font=("Arial", 20), fg="black")
-timer_label.pack(pady=10)
-
-start_button = Button(tk, text="Start Timer", command=start_timer)
-start_button.pack(pady=5)
-
-lb = Label(tk, text='현재 횟수: 0', fg='blue', font=("Arial", 16))
-lb.pack()
-
-bt1 = Button(tk, text='Button', command=click, state=DISABLED)
-bt1.pack(padx=10, pady=6)
-
-bt2 = Button(tk, text='reset', command=reset)
-bt2.pack(padx=10, pady=6)
-
-tk.mainloop()
+    st.session_state.current_count = '현재 횟수: 0'
+    st.session_state.timer_text = 'Time left: 0 seconds'
+    st.session_state.final_count = None
+    st.session_state.start_button_disabled = False
+    st.session_state.button_disabled = True
